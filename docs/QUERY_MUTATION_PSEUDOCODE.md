@@ -6,6 +6,124 @@
 
 ---
 
+## 🚀 ONBOARDING MUTATIONS
+
+### `startOnboarding(user_id: ID)`
+```
+PSEUDOCODE:
+1. Create onboarding progress record for user
+2. Set initial step to "profile_setup"
+3. Set status to "in_progress"
+4. Set started_at timestamp
+5. Return onboarding session ID
+
+RETURN TYPE: ID
+```
+
+### `completeProfileStep(user_id: ID, profile_data: ProfileDataObject)`
+```
+PSEUDOCODE:
+1. Validate required profile fields (first_name, birth_date, gender)
+2. Update user profile with provided data
+3. Update onboarding progress to "profile_completed"
+4. Update updated_at timestamp
+5. Return success status
+
+RETURN TYPE: { success: boolean, next_step: string }
+```
+
+### `uploadOnboardingPhotos(user_id: ID, photos: PhotoArray)`
+```
+PSEUDOCODE:
+1. Validate photo array (1-6 photos)
+2. Process each photo:
+   - Upload to storage
+   - Generate thumbnails
+   - Set first photo as primary
+3. Create profile photo records for each photo
+4. Update onboarding progress to "photos_uploaded"
+5. Return uploaded photo URLs
+
+RETURN TYPE: { 
+  success: boolean, 
+  photos: [{ photo_id: ID, url: string, is_primary: boolean }] 
+}
+```
+
+### `selectInterests(user_id: ID, interests: StringArray)`
+```
+PSEUDOCODE:
+1. Validate interests array (minimum 3, maximum 20)
+2. Clear existing user interests
+3. Add each interest to user_interests table
+4. Update onboarding progress to "interests_selected"
+5. Return success status
+
+RETURN TYPE: { success: boolean, next_step: string }
+```
+
+### `setLocationPreferences(user_id: ID, location_data: LocationObject, preferences: PreferenceObject)`
+```
+PSEUDOCODE:
+1. Validate location coordinates
+2. Reverse geocode to get location name
+3. Update user location data
+4. Set discovery preferences:
+   - max_distance
+   - age_min
+   - age_max
+   - show_me
+5. Update onboarding progress to "preferences_set"
+6. Return success status
+
+RETURN TYPE: { success: boolean, next_step: string }
+```
+
+### `completeOnboarding(user_id: ID)`
+```
+PSEUDOCODE:
+1. Verify all onboarding steps are completed
+2. Update user status to "onboarding_complete"
+3. Set onboarding progress status to "completed"
+4. Set completed_at timestamp
+5. Create welcome notification
+6. Award free trial subscription if applicable
+7. Return completion status
+
+RETURN TYPE: { 
+  success: boolean, 
+  user_ready: boolean,
+  trial_days: number | null
+}
+```
+
+### `skipOnboardingStep(user_id: ID, step: string)`
+```
+PSEUDOCODE:
+1. Validate step name is valid
+2. Update onboarding progress to skip this step
+3. Set step status to "skipped"
+4. Determine next required step
+5. Return next step information
+
+RETURN TYPE: { success: boolean, next_step: string, can_skip: boolean }
+```
+
+### `resetOnboarding(user_id: ID)`
+```
+PSEUDOCODE:
+1. Delete existing onboarding progress record
+2. Reset user profile to minimal state
+3. Remove uploaded photos
+4. Clear selected interests
+5. Create new onboarding progress record
+6. Return reset status
+
+RETURN TYPE: { success: boolean, new_session_id: ID }
+```
+
+---
+
 ## 🔐 AUTHENTICATION QUERIES
 
 ### `getUserByPhone(phone_number: string)`

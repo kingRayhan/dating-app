@@ -14,550 +14,510 @@ This document outlines the complete backend API design and database entity struc
 
 ## 2. System Architecture Overview
 
-### 2.1 Microservices Structure
+### 2.1 Hybrid Architecture Structure
 
 ```
-dating-app-backend/
-├── user-service/           # User management and authentication
-├── profile-service/        # Profile creation and management
-├── matching-service/       # Recommendation engine and matching
-├── messaging-service/      # Real-time chat and notifications
-├── media-service/          # Photo storage and processing
-├── payment-service/        # Subscription and billing
-├── moderation-service/     # Content moderation and safety
-└── api-gateway/           # Entry point and routing
+Frontend Clients
+    ↓ (Queries - Direct Convex)
+    Convex Data Layer (Pure Data Operations)
+    ↑ (Mutations - Via API)
+Your API Services (Business Logic Layer)
+    ↓ (External Integrations)
+Third-party Services (Twilio, Stripe, etc.)
 ```
 
-### 2.2 Technology Stack
+### 2.2 Component Responsibilities
 
-- **Runtime:** Node.js 18+ with NestJS framework
-- **Database:** PostgreSQL 14+ (primary), Redis 7+ (caching)
-- **ORM:** Prisma ORM
+**Convex Data Layer:**
+- Pure data storage and retrieval
+- Real-time subscriptions and synchronization
+- ACID-compliant transactions
+- Automatic scaling and infrastructure management
+- Schema management and indexing
+
+**API Services Layer:**
+- Business logic and validation
+- Authentication and authorization
+- External service integrations
+- Complex workflows and orchestration
+- Rate limiting and security policies
+
+### 2.4 Technology Stack
+
+**API Services Layer:**
+- **Runtime:** Node.js 18+ with Express/NestJS framework
 - **Authentication:** Custom OTP service with Twilio
-- **Real-time:** Socket.IO
+- **External Services:** Twilio (SMS), Stripe (Payments), Cloud Storage
 - **API Documentation:** Swagger/OpenAPI 3.0
 - **Deployment:** Docker containers with Kubernetes orchestration
 
+**Convex Data Layer:**
+- **Platform:** Convex (headless database)
+- **Language:** TypeScript (schema, queries, mutations)
+- **Real-time:** Built-in WebSocket management
+- **Scaling:** Automatic serverless scaling
+- **Deployment:** Managed Convex cloud hosting
+
+**Read Operations (Queries):**
+```
+Frontend → Convex Client → Direct Data Access
+(Low latency, real-time updates, no business logic)
+```
+
+**Write Operations (Mutations):**
+```
+Frontend → Your API Service → Business Logic → Convex Mutation
+(Full validation, security checks, complex workflows)
+```
+
 ---
 
-## 3. Database Entity Design
+## 3. Convex Schema Design
 
-### 3.1 Core Entities
+### 3.1 Core Data Tables (Convex Schema)
 
 #### Users Table
-```sql
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    phone_number VARCHAR(15) UNIQUE NOT NULL,
-    otp_hash VARCHAR(255),
-    otp_expires_at TIMESTAMP,
-    is_verified BOOLEAN DEFAULT FALSE,
-    last_login TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+```typescript
+// schema.ts
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  users: defineTable({
+    phone_number: v.string(),
+    otp_hash: v.optional(v.string()),
+    otp_expires_at: v.optional(v.number()),
+    is_verified: v.boolean(),
+    last_login: v.optional(v.number()),
+    created_at: v.number(),
+    updated_at: v.number()
+  }).index("by_phone", ["phone_number"]),
+  
+  user_profiles: defineTable({
+    user_id: v.id("users"),
+    first_name: v.optional(v.string()),
+    last_name: v.optional(v.string()),
+    birth_date: v.optional(v.number()),
+    gender: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    location: v.optional(v.object({
+      latitude: v.number(),
+      longitude: v.number()
+    })),
+    location_name: v.optional(v.string()),
+    max_distance: v.number(),
+    age_min: v.number(),
+    age_max: v.number(),
+    show_me: v.string(),
+    created_at: v.number(),
+    updated_at: v.number()
+  }).index("by_user", ["user_id"]),
+  
+  profile_photos: defineTable({
+    user_id: v.id("users"),
+    photo_url: v.string(),
+    is_primary: v.boolean(),
+    order_index: v.number(),
+    created_at: v.number()
+  }).index("by_user", ["user_id"]),
+  
+  user_interests: defineTable({
+    user_id: v.id("users"),
+    interest_name: v.string(),
+    category: v.optional(v.string()),
+    created_at: v.number()
+  }).index("by_user", ["user_id"]),
+  
+  matches: defineTable({
+    user1_id: v.id("users"),
+    user2_id: v.id("users"),
+    matched_at: v.number(),
+    is_active: v.boolean(),
+    created_at: v.number()
+  }).index("by_user1", ["user1_id"])
+    .index("by_user2", ["user2_id"]),
+  
+  messages: defineTable({
+    match_id: v.id("matches"),
+    sender_id: v.id("users"),
+    content: v.string(),
+    message_type: v.string(),
+    is_read: v.boolean(),
+    sent_at: v.number()
+  }).index("by_match", ["match_id"])
+    .index("by_sender", ["sender_id"]),
+  
+  swipes: defineTable({
+    swiper_id: v.id("users"),
+    swiped_id: v.id("users"),
+    action: v.union(v.literal("like"), v.literal("pass")),
+    created_at: v.number()
+  }).index("by_swiper", ["swiper_id"])
+    .index("by_swiped", ["swiped_id"])
+    .index("by_pair", ["swiper_id", "swiped_id"]),
+  
+  subscriptions: defineTable({
+    user_id: v.id("users"),
+    plan_type: v.string(),
+    status: v.string(),
+    started_at: v.number(),
+    expires_at: v.optional(v.number()),
+    created_at: v.number()
+  }).index("by_user", ["user_id"]),
+  
+  reports: defineTable({
+    reporter_id: v.id("users"),
+    reported_user_id: v.id("users"),
+    reason: v.string(),
+    description: v.optional(v.string()),
+    status: v.string(),
+    created_at: v.number()
+  }).index("by_reporter", ["reporter_id"])
+    .index("by_reported", ["reported_user_id"])
+});
 ```
 
-#### UserProfiles Table
-```sql
-CREATE TABLE user_profiles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    first_name VARCHAR(50),
-    last_name VARCHAR(50),
-    birth_date DATE,
-    gender VARCHAR(20),
-    bio TEXT,
-    location POINT,
-    location_name VARCHAR(255),
-    max_distance INTEGER DEFAULT 50,
-    age_min INTEGER DEFAULT 18,
-    age_max INTEGER DEFAULT 100,
-    show_me VARCHAR(20) DEFAULT 'everyone',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id)
-);
+### 3.2 Pure Query Functions (Direct Client Access)
+
+#### User Profile Queries
+```typescript
+// queries/profile.ts
+import { query } from "./_generated/server";
+import { v } from "convex/values";
+
+export const getCurrentUserProfile = query({
+  args: {},
+  handler: async ({ db }, _args) => {
+    // Direct data access - no business logic
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const user = await db
+      .query("users")
+      .filter(q => q.eq(q.field("phone_number"), identity.phone))
+      .unique();
+      
+    if (!user) return null;
+    
+    const profile = await db
+      .query("user_profiles")
+      .filter(q => q.eq(q.field("user_id"), user._id))
+      .unique();
+      
+    return profile;
+  }
+});
+
+export const getDiscoveryFeed = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async ({ db }, { limit = 20 }) => {
+    // Pure data query for discovery feed
+    const identity = await ctx.auth.getUserIdentity();
+    // Return potential matches based on location/preferences
+    // No complex business logic here
+  }
+});
+
+export const getUserMatches = query({
+  args: {},
+  handler: async ({ db }) => {
+    // Direct match data retrieval
+    const identity = await ctx.auth.getUserIdentity();
+    // Return user's matches with minimal processing
+  }
+});
 ```
 
-#### ProfilePhotos Table
-```sql
-CREATE TABLE profile_photos (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    photo_url VARCHAR(500) NOT NULL,
-    is_primary BOOLEAN DEFAULT FALSE,
-    order_index INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+### 3.3 Mutation Functions (Called via API Services)
 
-#### UserInterests Table
-```sql
-CREATE TABLE user_interests (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    interest_name VARCHAR(100) NOT NULL,
-    category VARCHAR(50),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, interest_name)
-);
-```
+#### Authentication Mutations
+```typescript
+// mutations/auth.ts
+import { mutation } from "./_generated/server";
+import { v } from "convex/values";
 
-#### Matches Table
-```sql
-CREATE TABLE matches (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user1_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    user2_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    matched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user1_id, user2_id)
-);
-```
+export const createUser = mutation({
+  args: {
+    phone_number: v.string()
+  },
+  handler: async ({ db }, { phone_number }) => {
+    // Pure data creation - called from your API service
+    const existingUser = await db
+      .query("users")
+      .filter(q => q.eq(q.field("phone_number"), phone_number))
+      .unique();
+      
+    if (existingUser) {
+      return { user_id: existingUser._id };
+    }
+    
+    const userId = await db.insert("users", {
+      phone_number,
+      is_verified: false,
+      created_at: Date.now(),
+      updated_at: Date.now()
+    });
+    
+    return { user_id: userId };
+  }
+});
 
-#### Messages Table
-```sql
-CREATE TABLE messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
-    sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    message_type VARCHAR(20) DEFAULT 'text',
-    is_read BOOLEAN DEFAULT FALSE,
-    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-#### Swipes Table
-```sql
-CREATE TABLE swipes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    swiper_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    swiped_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    action VARCHAR(10) NOT NULL, -- 'like' or 'pass'
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(swiper_id, swiped_id)
-);
-```
-
-#### Subscriptions Table
-```sql
-CREATE TABLE subscriptions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    plan_type VARCHAR(20) NOT NULL,
-    status VARCHAR(20) DEFAULT 'active',
-    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-#### Reports Table
-```sql
-CREATE TABLE reports (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    reporter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    reported_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    reason VARCHAR(100) NOT NULL,
-    description TEXT,
-    status VARCHAR(20) DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### 3.2 Indexes for Performance
-
-```sql
--- Performance indexes
-CREATE INDEX idx_users_phone ON users(phone_number);
-CREATE INDEX idx_users_verified ON users(is_verified);
-CREATE INDEX idx_profiles_location ON user_profiles USING GIST(location);
-CREATE INDEX idx_swipes_swiper ON swipes(swiper_id);
-CREATE INDEX idx_swipes_swiped ON swipes(swiped_id);
-CREATE INDEX idx_matches_user1 ON matches(user1_id);
-CREATE INDEX idx_matches_user2 ON matches(user2_id);
-CREATE INDEX idx_messages_match ON messages(match_id);
-CREATE INDEX idx_messages_sender ON messages(sender_id);
+export const setOTP = mutation({
+  args: {
+    user_id: v.id("users"),
+    otp_hash: v.string(),
+    expires_at: v.number()
+  },
+  handler: async ({ db }, { user_id, otp_hash, expires_at }) => {
+    // Pure data update - business logic handled in API service
+    await db.patch(user_id, {
+      otp_hash,
+      otp_expires_at: expires_at,
+      updated_at: Date.now()
+    });
+  }
+});
 ```
 
 ---
 
-## 4. API Endpoints Design
+## 4. API Endpoints Design (Business Logic Layer)
 
 ### 4.1 Authentication Service (`/api/v1/auth`)
 
 #### POST `/send-otp`
-Send OTP to user's phone number
-```json
-Request:
-{
-  "phone_number": "+1234567890"
-}
-
-Response (200):
-{
-  "success": true,
-  "message": "OTP sent successfully",
-  "expires_in": 300
-}
+Send OTP to user's phone number (business logic + Convex call)
+```javascript
+// api/auth/send-otp.js
+app.post('/api/v1/auth/send-otp', async (req, res) => {
+  const { phone_number } = req.body;
+  
+  // Business logic: validation, rate limiting, fraud detection
+  if (!isValidPhoneNumber(phone_number)) {
+    return res.status(400).json({ error: 'Invalid phone number' });
+  }
+  
+  // Business logic: check rate limits
+  const canSend = await checkRateLimit(phone_number);
+  if (!canSend) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+  
+  // Generate OTP
+  const otp = generateOTP();
+  const otpHash = hashOTP(otp);
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+  
+  // Call Convex for pure data operation
+  const userResult = await convexClient.mutation(
+    api.auth.createUser,
+    { phone_number }
+  );
+  
+  await convexClient.mutation(
+    api.auth.setOTP,
+    { 
+      user_id: userResult.user_id,
+      otp_hash: otpHash,
+      expires_at: expiresAt
+    }
+  );
+  
+  // Business logic: send SMS via Twilio
+  await sendSMSThroughTwilio(phone_number, otp);
+  
+  res.json({
+    success: true,
+    message: "OTP sent successfully",
+    expires_in: 300
+  });
+});
 ```
 
 #### POST `/verify-otp`
-Verify OTP and generate session token
-```json
-Request:
-{
-  "phone_number": "+1234567890",
-  "otp": "123456"
-}
-
-Response (200):
-{
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "uuid-here",
-    "phone_number": "+1234567890",
-    "is_verified": true
+Verify OTP and generate session (business logic + Convex call)
+```javascript
+// api/auth/verify-otp.js
+app.post('/api/v1/auth/verify-otp', async (req, res) => {
+  const { phone_number, otp } = req.body;
+  
+  // Business logic: validation
+  if (!phone_number || !otp) {
+    return res.status(400).json({ error: 'Missing required fields' });
   }
-}
-```
-
-#### POST `/refresh-token`
-Refresh authentication token
-```json
-Headers: { "Authorization": "Bearer <token>" }
-
-Response (200):
-{
-  "success": true,
-  "token": "new-jwt-token-here"
-}
-```
-
-#### POST `/logout`
-Logout and invalidate session
-```json
-Headers: { "Authorization": "Bearer <token>" }
-
-Response (200):
-{
-  "success": true,
-  "message": "Logged out successfully"
-}
-```
-
-### 4.2 User Profile Service (`/api/v1/profile`)
-
-#### GET `/me`
-Get current user's profile
-```json
-Headers: { "Authorization": "Bearer <token>" }
-
-Response (200):
-{
-  "success": true,
-  "profile": {
-    "id": "uuid-here",
-    "first_name": "John",
-    "last_name": "Doe",
-    "birth_date": "1995-05-15",
-    "gender": "male",
-    "bio": "Software developer",
-    "location": {
-      "latitude": 40.7128,
-      "longitude": -74.0060
-    },
-    "photos": [
-      {
-        "id": "photo-uuid",
-        "url": "https://storage.url/photo.jpg",
-        "is_primary": true
-      }
-    ],
-    "interests": ["technology", "travel", "music"]
+  
+  // Call Convex to get user and OTP data
+  const userData = await convexClient.query(
+    api.auth.getUserByPhone,
+    { phone_number }
+  );
+  
+  if (!userData) {
+    return res.status(404).json({ error: 'User not found' });
   }
-}
+  
+  // Business logic: verify OTP
+  const isValid = verifyOTP(otp, userData.otp_hash);
+  const isExpired = Date.now() > userData.otp_expires_at;
+  
+  if (!isValid || isExpired) {
+    return res.status(401).json({ error: 'Invalid or expired OTP' });
+  }
+  
+  // Business logic: generate JWT token
+  const token = generateJWT(userData.user_id);
+  
+  // Call Convex to update user status
+  await convexClient.mutation(
+    api.auth.markUserVerified,
+    { user_id: userData.user_id }
+  );
+  
+  res.json({
+    success: true,
+    token,
+    user: {
+      id: userData.user_id,
+      phone_number: userData.phone_number,
+      is_verified: true
+    }
+  });
+});
 ```
+
+### 4.2 Profile Management Service (`/api/v1/profile`)
 
 #### PUT `/me`
-Update user profile
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Request:
-{
-  "first_name": "John",
-  "last_name": "Doe",
-  "birth_date": "1995-05-15",
-  "gender": "male",
-  "bio": "Updated bio",
-  "location": {
-    "latitude": 40.7128,
-    "longitude": -74.0060
-  },
-  "preferences": {
-    "max_distance": 50,
-    "age_min": 25,
-    "age_max": 35,
-    "show_me": "women"
+Update user profile with validation (business logic + Convex call)
+```javascript
+// api/profile/update.js
+app.put('/api/v1/profile/me', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const profileData = req.body;
+  
+  // Business logic: validation and sanitization
+  const validationErrors = validateProfileData(profileData);
+  if (validationErrors.length > 0) {
+    return res.status(400).json({ errors: validationErrors });
   }
-}
-
-Response (200):
-{
-  "success": true,
-  "message": "Profile updated successfully"
-}
-```
-
-#### POST `/photos`
-Upload profile photo
-```json
-Headers: { 
-  "Authorization": "Bearer <token>",
-  "Content-Type": "multipart/form-data"
-}
-Form Data: { "photo": <file>, "is_primary": true }
-
-Response (200):
-{
-  "success": true,
-  "photo": {
-    "id": "photo-uuid",
-    "url": "https://storage.url/new-photo.jpg",
-    "is_primary": true
+  
+  // Business logic: check subscription limits
+  const userSubscription = await getUserSubscription(userId);
+  if (profileData.photos && profileData.photos.length > getMaxPhotos(userSubscription.plan)) {
+    return res.status(400).json({ error: 'Photo limit exceeded for your plan' });
   }
-}
-```
-
-#### DELETE `/photos/{photoId}`
-Delete profile photo
-```json
-Headers: { "Authorization": "Bearer <token>" }
-
-Response (200):
-{
-  "success": true,
-  "message": "Photo deleted successfully"
-}
+  
+  // Business logic: geocoding if location changed
+  if (profileData.location) {
+    const geocodedLocation = await geocodeLocation(profileData.location_name);
+    profileData.location = geocodedLocation;
+  }
+  
+  // Call Convex for pure data update
+  await convexClient.mutation(
+    api.profiles.updateUserProfile,
+    { 
+      user_id: userId,
+      ...sanitizeProfileData(profileData)
+    }
+  );
+  
+  res.json({
+    success: true,
+    message: "Profile updated successfully"
+  });
+});
 ```
 
 ### 4.3 Matching Service (`/api/v1/matching`)
 
-#### GET `/feed`
-Get potential matches feed
-```json
-Headers: { "Authorization": "Bearer <token>" }
-
-Response (200):
-{
-  "success": true,
-  "users": [
-    {
-      "id": "user-uuid",
-      "first_name": "Jane",
-      "age": 28,
-      "bio": "Designer",
-      "distance_km": 5.2,
-      "photos": ["https://photo1.jpg", "https://photo2.jpg"],
-      "interests": ["art", "photography"],
-      "mutual_interests": ["travel", "music"]
-    }
-  ]
-}
-```
-
 #### POST `/swipe`
-Record swipe action
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Request:
-{
-  "target_user_id": "target-uuid",
-  "action": "like"  // or "pass"
-}
-
-Response (200):
-{
-  "success": true,
-  "is_match": true,
-  "match_id": "match-uuid"  // only if it's a match
-}
-```
-
-#### GET `/matches`
-Get user's matches
-```json
-Headers: { "Authorization": "Bearer <token>" }
-
-Response (200):
-{
-  "success": true,
-  "matches": [
-    {
-      "id": "match-uuid",
-      "user": {
-        "id": "user-uuid",
-        "first_name": "Jane",
-        "photos": ["https://photo.jpg"]
-      },
-      "matched_at": "2026-02-27T10:30:00Z",
-      "last_message": {
-        "content": "Hey there!",
-        "sent_at": "2026-02-27T15:45:00Z"
-      }
-    }
-  ]
-}
-```
-
-### 4.4 Messaging Service (`/api/v1/messages`)
-
-#### GET `/conversations/{matchId}`
-Get conversation messages
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Query: { "limit": 50, "before": "timestamp" }
-
-Response (200):
-{
-  "success": true,
-  "messages": [
-    {
-      "id": "message-uuid",
-      "sender_id": "user-uuid",
-      "content": "Hello!",
-      "sent_at": "2026-02-27T15:30:00Z",
-      "is_read": true
-    }
-  ]
-}
-```
-
-#### POST `/send`
-Send message
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Request:
-{
-  "match_id": "match-uuid",
-  "content": "Hi there!",
-  "message_type": "text"  // or "photo", "gif"
-}
-
-Response (200):
-{
-  "success": true,
-  "message": {
-    "id": "message-uuid",
-    "content": "Hi there!",
-    "sent_at": "2026-02-27T15:30:00Z"
+Record swipe with business logic (complex validation + Convex call)
+```javascript
+// api/matching/swipe.js
+app.post('/api/v1/matching/swipe', authenticateToken, async (req, res) => {
+  const swiperId = req.user.id;
+  const { target_user_id, action } = req.body;
+  
+  // Business logic: validation
+  if (!target_user_id || !['like', 'pass'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid request' });
   }
-}
-```
-
-#### POST `/mark-read`
-Mark messages as read
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Request:
-{
-  "match_id": "match-uuid",
-  "message_ids": ["msg1-uuid", "msg2-uuid"]
-}
-
-Response (200):
-{
-  "success": true,
-  "marked_count": 2
-}
-```
-
-### 4.5 Safety Service (`/api/v1/safety`)
-
-#### POST `/report`
-Report user
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Request:
-{
-  "reported_user_id": "user-uuid",
-  "reason": "inappropriate_behavior",
-  "description": "User sent inappropriate messages"
-}
-
-Response (200):
-{
-  "success": true,
-  "report_id": "report-uuid"
-}
-```
-
-#### POST `/block`
-Block user
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Request:
-{
-  "user_id": "user-uuid"
-}
-
-Response (200):
-{
-  "success": true,
-  "message": "User blocked successfully"
-}
-```
-
-### 4.6 Payment Service (`/api/v1/billing`)
-
-#### GET `/plans`
-Get subscription plans
-```json
-Response (200):
-{
-  "success": true,
-  "plans": [
-    {
-      "id": "premium_monthly",
-      "name": "Premium Monthly",
-      "price": 19.99,
-      "interval": "month",
-      "features": [
-        "Unlimited likes",
-        "See who liked you",
-        "Rewind feature"
-      ]
+  
+  // Business logic: prevent self-swiping
+  if (swiperId === target_user_id) {
+    return res.status(400).json({ error: 'Cannot swipe on yourself' });
+  }
+  
+  // Business logic: rate limiting
+  const canSwipe = await checkSwipeRateLimit(swiperId);
+  if (!canSwipe) {
+    return res.status(429).json({ error: 'Swipe limit reached' });
+  }
+  
+  // Business logic: check if already swiped
+  const existingSwipe = await convexClient.query(
+    api.swipes.getSwipe,
+    { swiper_id: swiperId, swiped_id: target_user_id }
+  );
+  
+  if (existingSwipe) {
+    return res.status(400).json({ error: 'Already swiped on this user' });
+  }
+  
+  // Business logic: fraud detection
+  const isSuspicious = await detectFraudulentSwiping(swiperId, target_user_id);
+  if (isSuspicious) {
+    return res.status(403).json({ error: 'Suspicious activity detected' });
+  }
+  
+  // Call Convex to record the swipe
+  const swipeResult = await convexClient.mutation(
+    api.swipes.recordSwipe,
+    { 
+      swiper_id: swiperId,
+      swiped_id: target_user_id,
+      action
     }
-  ]
-}
+  );
+  
+  // Business logic: check for match and send notifications
+  if (swipeResult.isMatch) {
+    await sendMatchNotification(swipeResult.match_id);
+    
+    // Business logic: award premium features for match
+    await awardMatchBonus(swiperId);
+  }
+  
+  res.json({
+    success: true,
+    is_match: swipeResult.isMatch,
+    match_id: swipeResult.match_id
+  });
+});
 ```
 
-#### POST `/subscribe`
-Create subscription
-```json
-Headers: { "Authorization": "Bearer <token>" }
-Request:
-{
-  "plan_id": "premium_monthly",
-  "payment_method": {
-    "type": "card",
-    "token": "stripe_token_here"
-  }
-}
+### 4.4 Direct Convex Queries (Client → Convex)
 
-Response (200):
-{
-  "success": true,
-  "subscription": {
-    "id": "sub-uuid",
-    "status": "active",
-    "expires_at": "2026-03-27T00:00:00Z"
-  }
-}
+#### Frontend Usage Examples
+```javascript
+// Frontend - Direct Convex queries (no business logic needed)
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+
+// Get user profile (direct query)
+const profile = useQuery(api.queries.getCurrentUserProfile);
+
+// Get discovery feed (direct query)
+const feed = useQuery(api.queries.getDiscoveryFeed, { limit: 20 });
+
+// Get matches (direct query)
+const matches = useQuery(api.queries.getUserMatches);
+
+// Subscribe to real-time messages
+const messages = useQuery(api.queries.getConversationMessages, { 
+  match_id: currentMatchId 
+});
 ```
 
 ---

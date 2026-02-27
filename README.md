@@ -8,6 +8,7 @@ All project documentation is located in the [`/docs`](./docs) directory:
 
 - [Software Requirements Specification (SRS)](./docs/DATING_APP_SRS.md) - Complete technical and business requirements
 - [Backend API and Database Plan](./docs/BACKEND_API_PLAN.md) - Detailed API endpoints and database design
+- [Convex Schema, Queries & API Plans](./docs/CONVEX_SCHEMA_QUERIES.md) - Complete Convex implementation with hybrid architecture
 
 ## 🚀 Project Overview
 

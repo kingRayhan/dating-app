@@ -11,6 +11,7 @@ All project documentation is located in the [`/docs`](./docs) directory:
 - [Convex Schema, Queries & API Plans](./docs/CONVEX_SCHEMA_QUERIES.md) - Complete Convex implementation with hybrid architecture
 - [Convex Queries Reference](./docs/CONVEX_QUERIES_REFERENCE.md) - Pseudocode reference for all query functions
 - [Query & Mutation Pseudocode](./docs/QUERY_MUTATION_PSEUDOCODE.md) - Complete pseudocode for all functions
+- [Screen to Query/Mutation Map](./docs/SCREEN_QUERY_MUTATION_MAP.md) - UI screen to backend function mapping
 
 ## 🚀 Project Overview
 

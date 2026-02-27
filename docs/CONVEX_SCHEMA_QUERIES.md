@@ -176,6 +176,14 @@ export default defineSchema({
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
+/*
+PSEUDOCODE for getUserByPhone:
+INPUT: phone_number (string)
+LOGIC:
+  1. Search users table using phone number index
+  2. Return the matching user record
+  3. Return null if no user found
+*/
 export const getUserByPhone = query({
   args: { phone_number: v.string() },
   handler: async ({ db }, { phone_number }) => {
@@ -186,6 +194,14 @@ export const getUserByPhone = query({
   }
 });
 
+/*
+PSEUDOCODE for getCurrentUser:
+INPUT: None (uses authenticated user context)
+LOGIC:
+  1. Get current user's phone number from auth context
+  2. Find user in database by phone number
+  3. Return user object or null if not found
+*/
 export const getCurrentUser = query({
   args: {},
   handler: async ({ db, auth }) => {
@@ -199,6 +215,15 @@ export const getCurrentUser = query({
   }
 });
 
+/*
+PSEUDOCODE for getUserProfileById:
+INPUT: user_id (ID reference)
+LOGIC:
+  1. Get user record by ID
+  2. Fetch all profile photos for this user
+  3. Fetch all interests for this user
+  4. Return structured profile data with user info, photos, and interests
+*/
 export const getUserProfileById = query({
   args: { user_id: v.id("users") },
   handler: async ({ db }, { user_id }) => {
@@ -275,6 +300,24 @@ function calculateDistance(loc1: any, loc2: any): number {
   return R * c;
 }
 
+/*
+PSEUDOCODE for getDiscoveryFeed:
+INPUT: limit (number, optional), offset (number, optional)
+LOGIC:
+  1. Get current authenticated user
+  2. Validate user has complete profile (location and birth date)
+  3. Set default preferences (distance, age range, gender preferences)
+  4. Calculate age range timestamps
+  5. Find all users within age range who have locations
+  6. Filter by:
+     - Distance (within max_distance)
+     - Gender preferences (show_me setting)
+     - Not self
+  7. Remove users already swiped on
+  8. Sort by distance (closest first)
+  9. Apply pagination (limit/offset)
+  10. Return simplified user data for feed
+*/
 export const getDiscoveryFeed = query({
   args: { 
     limit: v.optional(v.number()),
@@ -365,6 +408,16 @@ export const getDiscoveryFeed = query({
   }
 });
 
+/*
+PSEUDOCODE for getUserDiscoveryDetails:
+INPUT: user_id (ID reference)
+LOGIC:
+  1. Get user record by ID
+  2. Fetch user's primary profile photo
+  3. Fetch up to 5 user interests
+  4. Calculate user's age from birth date
+  5. Return simplified profile data for discovery view
+*/
 export const getUserDiscoveryDetails = query({
   args: { user_id: v.id("users") },
   handler: async ({ db }, { user_id }) => {
@@ -402,6 +455,21 @@ export const getUserDiscoveryDetails = query({
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
+/*
+PSEUDOCODE for getUserMatches:
+INPUT: limit (number, optional)
+LOGIC:
+  1. Get current authenticated user
+  2. Find all matches where user is user1
+  3. Find all matches where user is user2
+  4. Combine and deduplicate match records
+  5. For each match:
+     - Identify the other user in the match
+     - Get their profile information
+     - Get their primary photo
+     - Get the last message in the conversation
+  6. Return structured match data with user info and last message
+*/
 export const getUserMatches = query({
   args: { limit: v.optional(v.number()) },
   handler: async ({ db, auth }, { limit = 50 }) => {
@@ -485,6 +553,15 @@ export const getUserMatches = query({
   }
 });
 
+/*
+PSEUDOCODE for getMatchById:
+INPUT: match_id (ID reference)
+LOGIC:
+  1. Get current authenticated user
+  2. Fetch match record by ID
+  3. Verify current user is part of this match (user1_id or user2_id)
+  4. Return match record if authorized, throw error if not
+*/
 export const getMatchById = query({
   args: { match_id: v.id("matches") },
   handler: async ({ db, auth }, { match_id }) => {
@@ -516,6 +593,17 @@ export const getMatchById = query({
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
+/*
+PSEUDOCODE for getConversationMessages:
+INPUT: match_id (ID reference), limit (number, optional), before (timestamp, optional)
+LOGIC:
+  1. Get current authenticated user
+  2. Verify user has access to this conversation (is user1 or user2 in match)
+  3. Fetch messages for this match
+  4. Apply pagination if timestamp provided
+  5. Order messages chronologically (oldest first for display)
+  6. Return message data with read status
+*/
 export const getConversationMessages = query({
   args: { 
     match_id: v.id("matches"),
@@ -568,6 +656,17 @@ export const getConversationMessages = query({
   }
 });
 
+/*
+PSEUDOCODE for getUnreadMessageCount:
+INPUT: None (uses authenticated user)
+LOGIC:
+  1. Get current authenticated user
+  2. Find all active matches for this user
+  3. For each match:
+     - Count unread messages sent by the other user
+  4. Sum all unread message counts
+  5. Return total unread message count
+*/
 export const getUnreadMessageCount = query({
   args: {},
   handler: async ({ db, auth }) => {
@@ -626,6 +725,21 @@ export const getUnreadMessageCount = query({
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
+/*
+PSEUDOCODE for getCurrentUserProfile:
+INPUT: None (uses authenticated user)
+LOGIC:
+  1. Get current authenticated user by phone number
+  2. Fetch all profile photos for this user
+  3. Fetch all user interests
+  4. Get active subscription information
+  5. Return complete profile data including:
+     - User authentication info
+     - Profile details with defaults
+     - Photos with ordering
+     - Interests list
+     - Subscription status
+*/
 export const getCurrentUserProfile = query({
   args: {},
   handler: async ({ db, auth }) => {
@@ -693,6 +807,18 @@ export const getCurrentUserProfile = query({
   }
 });
 
+/*
+PSEUDOCODE for searchUsers:
+INPUT: query (string), limit (number, optional)
+LOGIC:
+  1. Get current authenticated user
+  2. Search users table by first name using search index
+  3. Exclude current user from results
+  4. For each matching user:
+     - Get their basic profile information
+     - Fetch their primary photo
+  5. Return search results with user details and photos
+*/
 export const searchUsers = query({
   args: { 
     query: v.string(),

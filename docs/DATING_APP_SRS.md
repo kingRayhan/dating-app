@@ -95,19 +95,28 @@ Main functions include:
 ### 3.1 Functional Requirements
 
 #### 3.1.1 User Registration and Authentication
-**FR-001:** Users shall be able to register using email, phone number, or social media accounts
-**FR-002:** Users shall verify their identity through photo verification and/or government ID
-**FR-003:** Users shall be able to log in securely with two-factor authentication
-**FR-004:** Users shall be able to recover/reset passwords through verified channels
+**FR-001:** Users shall register using phone number only with OTP verification
+
+**FR-002:** Users shall receive OTP codes via SMS for authentication
+
+**FR-003:** Users shall be able to log in using phone number and OTP only
+
+**FR-004:** Users shall be able to recover access through new OTP verification
+
+**FR-005:** System shall not store or require traditional passwords
+
+**FR-006:** Users shall verify their identity through photo verification and/or government ID
 
 #### 3.1.2 User Profiles
-**FR-005:** Users shall create comprehensive profiles including:
+**FR-007:** Users shall create comprehensive profiles including:
 - Personal information (age, location, gender)
 - Photos (minimum 1, maximum 6)
 - Interests and hobbies
 - Relationship preferences
 - Bio/description
+
 **FR-006:** Users shall be able to edit and update their profile information
+
 **FR-007:** Users shall control profile visibility and privacy settings
 
 #### 3.1.3 Matching System
@@ -124,20 +133,29 @@ Main functions include:
 **FR-011:** System shall track user interactions to improve matching accuracy
 
 #### 3.1.4 Communication Features
+
 **FR-012:** Users shall communicate through real-time messaging with:
 - Text messaging
 - Photo sharing
 - Voice messages
 - Video calling capability
+
 **FR-013:** System shall provide message notifications and read receipts
+
 **FR-014:** Users shall be able to block and report inappropriate users
+
 **FR-015:** System shall implement end-to-end encryption for private communications
 
 #### 3.1.5 Safety and Moderation
+
 **FR-016:** System shall implement mandatory photo verification for all users
+
 **FR-017:** System shall provide reporting mechanisms for suspicious behavior
+
 **FR-018:** System shall include automated content moderation for messages and photos
+
 **FR-019:** Users shall be able to control who can contact them
+
 **FR-020:** System shall provide emergency contact features and safety resources
 
 #### 3.1.6 Monetization Features
@@ -147,75 +165,112 @@ Main functions include:
 - Advanced search filters
 - See who liked you
 - Rewind feature
+
 **FR-022:** System shall support in-app purchases for:
 - Profile boosts
 - Super likes
 - Virtual gifts
 - Premium filters
+
 **FR-023:** System shall implement advertising with user opt-out options
 
 ### 3.2 Non-Functional Requirements
 
 #### 3.2.1 Performance Requirements
+
 **NFR-001:** App shall load within 2 seconds on 4G networks
+
 **NFR-002:** Match feed shall generate within 1 second
+
 **NFR-003:** Messages shall deliver within 100ms
+
 **NFR-004:** System shall support 1 million concurrent users
+
 **NFR-005:** Database shall handle 100,000 matches per minute
 
 #### 3.2.2 Security Requirements
 **NFR-006:** All user data shall be encrypted at rest and in transit
+
 **NFR-007:** System shall implement role-based access control
+
 **NFR-008:** Regular security audits and penetration testing shall be conducted
-**NFR-009:** User authentication shall support multi-factor authentication
+
+**NFR-009:** User authentication shall use OTP-based verification for all access
+
 **NFR-010:** System shall comply with SOC 2 Type II standards
 
 #### 3.2.3 Usability Requirements
 **NFR-011:** App shall achieve SUS score of 75+ for user satisfaction
+
 **NFR-012:** First-time user onboarding shall complete within 3 minutes
+
 **NFR-013:** Core features shall be accessible within 3 clicks
+
 **NFR-014:** App shall support accessibility standards (WCAG 2.1 AA)
+
 **NFR-015:** User interface shall be consistent across all platforms
 
 #### 3.2.4 Reliability Requirements
+
 **NFR-016:** System shall maintain 99.9% uptime
+
 **NFR-017:** Data backup shall occur every 24 hours
+
 **NFR-018:** Automatic failover shall activate within 30 seconds
+
 **NFR-019:** Error recovery shall restore service within 5 minutes
+
 **NFR-020:** System shall provide detailed logging for troubleshooting
 
 #### 3.2.5 Compatibility Requirements
 **NFR-021:** Mobile app shall support iOS 14+ and Android 8+
+
 **NFR-022:** Web app shall support latest versions of major browsers
+
 **NFR-023:** App shall be responsive across different screen sizes
+
 **NFR-024:** API shall support JSON format for data exchange
+
 **NFR-025:** System shall integrate with major social media platforms
 
 ### 3.3 External Interface Requirements
 
 #### 3.3.1 User Interfaces
 **EIR-001:** Mobile app interfaces for iOS and Android
+
 **EIR-002:** Responsive web application interface
+
 **EIR-003:** Administrative dashboard for moderators
+
 **EIR-004:** Analytics and reporting interfaces
 
 #### 3.3.2 Hardware Interfaces
 **EIR-005:** Smartphone camera integration for photo uploads
+
 **EIR-006:** GPS/location services integration
+
 **EIR-007:** Push notification services integration
+
 **EIR-008:** Biometric authentication hardware support
 
 #### 3.3.3 Software Interfaces
 **EIR-009:** Social media API integration (Facebook, Instagram, Google)
+
 **EIR-010:** Payment gateway integration (Stripe, PayPal)
+
 **EIR-011:** Cloud storage services (AWS S3, Google Cloud Storage)
+
 **EIR-012:** Mapping services (Google Maps, Mapbox)
-**EIR-013:** SMS/email services for notifications
+
+**EIR-013:** SMS services for OTP delivery and notifications
 
 #### 3.3.4 Communications Interfaces
 **EIR-014:** RESTful API for mobile and web clients
+
 **EIR-015:** WebSocket connections for real-time messaging
+
 **EIR-016:** Push notification services (APNs, FCM)
+
 **EIR-017:** CDN for content delivery optimization
 
 ---
@@ -254,7 +309,7 @@ The dating app will follow a microservices architecture with the following core 
 - **Database**: PostgreSQL (primary), MongoDB (analytics)
 - **Caching**: Redis
 - **Real-time**: Socket.IO or GraphQL subscriptions
-- **Authentication**: JWT with OAuth 2.0
+- **Authentication**: OTP-based token system with temporary session management
 
 #### 4.2.3 Infrastructure
 - **Cloud Provider**: AWS (recommended) or GCP
@@ -268,8 +323,8 @@ The dating app will follow a microservices architecture with the following core 
 #### 4.3.1 Database Schema
 **Users Table:**
 - user_id (UUID)
-- email/phone
-- hashed_password
+- phone_number (unique)
+- otp_hash (temporary)
 - profile_data (JSON)
 - verification_status
 - created_at/updated_at
@@ -307,7 +362,7 @@ The dating app will follow a microservices architecture with the following core 
 ### 4.4 Security Architecture
 
 #### 4.4.1 Authentication and Authorization
-- Multi-factor authentication (email/SMS + password)
+- OTP-based authentication (SMS verification only)
 - OAuth 2.0 integration with social providers
 - JWT tokens with refresh token rotation
 - Role-based access control (RBAC)
@@ -315,7 +370,7 @@ The dating app will follow a microservices architecture with the following core 
 #### 4.4.2 Data Protection
 - AES-256 encryption for sensitive data at rest
 - TLS 1.3 for data in transit
-- Hashed passwords with bcrypt/scrypt
+- Temporary session tokens with automatic expiration
 - Regular security audits and penetration testing
 
 #### 4.4.3 Privacy Compliance

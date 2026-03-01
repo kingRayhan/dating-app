@@ -64,19 +64,28 @@ CREATE INDEX idx_photos_primary ON profile_photos(user_id, is_primary);
 
 #### `user_interests` Table
 ```sql
-CREATE TABLE user_interests (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    interest_name VARCHAR(100) NOT NULL,
-    category VARCHAR(50),
+CREATE TABLE interests (
+    id SERIAL PRIMARY KEY,
+    category_id INTEGER REFERENCES interest_categories(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    display_name VARCHAR(150) NOT NULL,
+    popularity_score INTEGER DEFAULT 0,  -- For trending/suggestions
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(user_id, interest_name)
+    UNIQUE(category_id, name)
 );
 
 -- Indexes
 CREATE INDEX idx_interests_user ON user_interests(user_id);
 CREATE INDEX idx_interests_name ON user_interests(interest_name);
+
+-- User interests mapping
+CREATE TABLE user_interests (
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    interest_id INTEGER REFERENCES interests(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, interest_id)
+);
 ```
 
 #### `swipes` Table
